@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "builtin-baseline": "f176b58f35a75f9f8f54099cd9df97d2e2793a2e",
+  "dependencies": [
+    {
+      "name": "ffmpeg",
+      "default-features": false,
+      "features": [
+        "avcodec",
+        "avfilter",
+        "avformat",
+        "avdevice",
+        "swresample"
+      ]
+    },
+    "icu",
+    "taglib",
+    "sdl2",
+    "getopt",
+    "libgme",
+    "libopenmpt",
+    "libsndfile",
+    "libarchive"
+  ],
+  "features": {
+    "fooyin-tests": {
+      "description": "Build tests",
+      "dependencies": [ "gtest" ]
+    }
+  }
+}
