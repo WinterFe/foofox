@@ -71,7 +71,7 @@ sudo dnf install \
 2. Clone the fooyin repository (including submodules):
 
 ```
-git clone --recurse-submodules https://github.com/fooyin/fooyin.git
+git clone --recurse-submodules https://github.com/WinterFe/foofox.git
 ```
 
 3. Switch into the directory: `cd fooyin`
