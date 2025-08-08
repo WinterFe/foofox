@@ -74,7 +74,7 @@ sudo dnf install \
 git clone --recurse-submodules https://github.com/WinterFe/foofox.git
 ```
 
-3. Switch into the directory: `cd fooyin`
+3. Switch into the directory: `cd foofox`
 4. Run CMake to generate a build environment:
 
 ```
