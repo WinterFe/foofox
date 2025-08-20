@@ -29,9 +29,15 @@ public:
     explicit TreeModel(QObject* parent = nullptr)
         : QAbstractItemModel{parent}
         , m_root{std::make_unique<Item>()}
+        , m_dirty{false}
     { }
 
     ~TreeModel() override = default;
+
+    [[nodiscard]] bool isDirty() const
+    {
+        return m_dirty;
+    }
 
     [[nodiscard]] QModelIndex index(int row, int column, const QModelIndex& parent) const override
     {
@@ -110,11 +116,14 @@ protected:
 
     void invalidateData()
     {
+        m_dirty = true;
         beginResetModel();
         endResetModel();
+        m_dirty = false;
     }
 
 private:
     std::unique_ptr<Item> m_root;
+    bool m_dirty;
 };
 } // namespace Fooyin

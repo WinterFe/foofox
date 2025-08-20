@@ -58,16 +58,18 @@ AudioPlaybackEngine::AudioPlaybackEngine(std::shared_ptr<AudioLoader> audioLoade
     , m_startPosition{0}
     , m_endPosition{0}
     , m_lastPosition{0}
+    , m_lastBufferEnd{0}
     , m_totalBufferTime{0}
     , m_bufferLength{static_cast<uint64_t>(m_settings->value<Settings::Core::BufferLength>())}
     , m_duration{0}
     , m_volume{1.0}
     , m_ending{false}
-    , m_decoding{false}
     , m_updatingTrack{false}
     , m_pauseNextTrack{false}
     , m_decoder{nullptr}
     , m_nextDecoder{nullptr}
+    , m_currentTrackSize{0}
+    , m_decoderStarted{false}
     , m_outputThread{new QThread(this)}
     , m_renderer{settings}
     , m_fadeIntervals{m_settings->value<Settings::Core::Internal::FadingIntervals>().value<FadingIntervals>()}
@@ -123,6 +125,8 @@ void AudioPlaybackEngine::loadTrack(const Track& track)
         updateTrackStatus(TrackStatus::Invalid);
         return;
     }
+
+    m_decoderStarted = false;
 
     qCDebug(ENGINE) << "Loading track:" << track.filenameExt();
 
@@ -190,6 +194,10 @@ void AudioPlaybackEngine::loadTrack(const Track& track)
         m_updatingTrack = true;
         m_currentTrack  = m_decoder->changedTrack();
         emit trackChanged(m_currentTrack);
+    }
+
+    if(m_source.device) {
+        m_currentTrackSize = static_cast<uint64_t>(m_source.device->size());
     }
 
     m_format = format.value();
@@ -293,8 +301,8 @@ void AudioPlaybackEngine::play()
             return;
         }
 
-        if(!m_decoding) {
-            m_decoding = true;
+        if(!m_decoderStarted) {
+            m_decoderStarted = true;
             m_decoder->start();
         }
 
@@ -593,7 +601,6 @@ void AudioPlaybackEngine::stopWorkers(bool full)
     m_clock.sync();
 
     m_pendingSeek = {};
-    m_decoding    = false;
 
     QMetaObject::invokeMethod(&m_renderer, &AudioRenderer::stop);
 
@@ -603,6 +610,7 @@ void AudioPlaybackEngine::stopWorkers(bool full)
     }
     if(m_decoder && (full || playbackState() != PlaybackState::Stopped)) {
         m_decoder->stop();
+        m_decoderStarted = false;
     }
 
     m_totalBufferTime = 0;
@@ -654,11 +662,15 @@ void AudioPlaybackEngine::currentFileChanged()
         return;
     }
 
-    m_decoder->stop();
-    m_source.device->seek(0);
-    m_decoder->init(m_source, m_currentTrack, AudioDecoder::UpdateTracks);
-    m_decoder->seek(m_lastPosition + m_totalBufferTime);
-    m_decoder->start();
+    // Reload file only if size changes (and potentially audio data offset) e.g. lyrics/artwork updates
+    if(std::exchange(m_currentTrackSize, m_source.device->size()) != m_currentTrackSize) {
+        m_decoder->stop();
+        if(checkOpenSource()) {
+            m_decoder->init(m_source, m_currentTrack, AudioDecoder::UpdateTracks);
+            m_decoder->seek(m_lastBufferEnd);
+            m_decoder->start();
+        }
+    }
 }
 
 bool AudioPlaybackEngine::checkOpenSource()
@@ -724,6 +736,7 @@ void AudioPlaybackEngine::readNextBuffer()
     const auto buffer = m_decoder->readBuffer(maxBytes);
     if(buffer.isValid()) {
         m_totalBufferTime += buffer.duration();
+        m_lastBufferEnd = buffer.endTime();
         QMetaObject::invokeMethod(&m_renderer, [this, buffer]() { m_renderer.queueBuffer(buffer); });
     }
 
@@ -754,7 +767,13 @@ void AudioPlaybackEngine::updateBitrate()
 
 void AudioPlaybackEngine::onBufferProcessed(const AudioBuffer& buffer)
 {
-    m_totalBufferTime -= buffer.duration();
+    if(buffer.duration() <= m_totalBufferTime) {
+        m_totalBufferTime -= buffer.duration();
+    }
+    else {
+        m_totalBufferTime = 0;
+    }
+
     emit bufferPlayed(buffer);
 }
 
